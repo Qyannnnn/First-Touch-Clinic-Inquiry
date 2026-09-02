@@ -9,4 +9,5 @@ urlpatterns = [
     path("guest/<uuid:lead_id>/continue/", views.trust_transition, name="trust_transition"),
     path("guest/<uuid:lead_id>/convert/", views.convert, name="convert"),
     path("patient/<uuid:session_id>/", views.patient_chat, name="patient_chat"),
+    path("patient/<uuid:session_id>/send/", views.patient_send, name="patient_send"),
 ]

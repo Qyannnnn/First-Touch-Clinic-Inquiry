@@ -10,6 +10,7 @@ from .services import (
     guest_reply,
     opening_for,
     process_incoming_message,
+    risk_aware_guest_reply,
 )
 
 def home(request):
@@ -129,3 +130,45 @@ def patient_chat(request, session_id):
         "patient_session": session,
         "messages": session.messages.order_by("created_at"),
     })
+
+def patient_send(request, session_id):
+    session = get_object_or_404(
+        PatientSession,
+        id=session_id,
+    )
+
+    if request.method == "POST":
+        text = request.POST.get(
+            "message",
+            "",
+        ).strip()
+
+        if text:
+            patient_message = Message.objects.create(
+                patient_session=session,
+                sender=Message.Sender.PATIENT,
+                content=text,
+            )
+
+            assessment = process_incoming_message(
+                patient_message
+            )
+
+            # Temporary safety-aware response.
+            # We will replace LOW-risk responses with
+            # the real AI intake assistant next.
+            reply, _ = risk_aware_guest_reply(
+                text,
+                assessment,
+            )
+
+            Message.objects.create(
+                patient_session=session,
+                sender=Message.Sender.AI,
+                content=reply,
+            )
+
+    return redirect(
+        "patient_chat",
+        session_id=session.id,
+    )
