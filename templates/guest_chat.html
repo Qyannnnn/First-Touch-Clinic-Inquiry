@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Guest chat · Nightingale{% endblock %}
+{% block content %}
+<div class="chat-layout">
+  <aside class="context-card">
+    <div class="eyebrow">LEADSESSION</div>
+    <h2>Guest context</h2>
+    <dl><dt>Channel</dt><dd>{{ lead.source_channel }}</dd><dt>Identity</dt><dd>{{ lead.identity_level }}</dd><dt>Campaign</dt><dd>{{ lead.campaign_id|default:'—' }}</dd></dl>
+    <p class="privacy-note">Guest mode: general information and useful preparation first. Nothing is presented here as a diagnosis.</p>
+  </aside>
+  <section class="chat-card">
+    <div class="chat-heading"><div><div class="eyebrow">STEP 2 · GUEST VALUE</div><h1>Nightingale AI</h1></div><span class="badge">Guest</span></div>
+    <div class="messages">
+      {% for m in messages %}<div class="message {{ m.sender }}"><span>{{ m.content }}</span></div>{% endfor %}
+    </div>
+    <form method="post" action="{% url 'guest_send' lead.id %}" class="composer">
+      {% csrf_token %}<input name="message" autocomplete="off" placeholder="Try: What questions should I ask about egg freezing?" required><button>Send</button>
+    </form>
+    <p class="emergency">If this is an emergency, exit Nightingale and dial 999 for Emergency Services.</p>
+    {% if has_value %}<div class="trust-card"><strong>You have something useful to take forward.</strong><p>Nothing has been sent to the clinic yet. Review and choose whether to continue securely.</p><a class="primary link-button" href="{% url 'trust_transition' lead.id %}">Review & continue securely</a></div>{% endif %}
+  </section>
+</div>
+{% endblock %}

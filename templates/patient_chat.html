@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Patient session · Nightingale{% endblock %}
+{% block content %}
+<div class="chat-layout">
+  <aside class="context-card">
+    <div class="eyebrow">PATIENTSESSION</div><h2>Context preserved</h2>
+    <dl><dt>Patient ID</dt><dd class="mono">{{ patient_session.patient.id }}</dd><dt>Original channel</dt><dd>{{ patient_session.origin_lead_session.source_channel }}</dd><dt>Campaign</dt><dd>{{ patient_session.origin_lead_session.campaign_id }}</dd></dl>
+    <h3>Living Profile</h3><p class="muted">Next build: chief complaint, symptoms, medications, allergies + provenance.</p>
+  </aside>
+  <section class="chat-card">
+    <div class="chat-heading"><div><div class="eyebrow">STEP 4 · PATIENT</div><h1>Nightingale AI</h1></div><span class="badge patient-badge">Patient</span></div>
+    <div class="success-banner">✓ LeadSession converted. Previous conversation carried forward.</div>
+    <div class="messages">{% for m in messages %}<div class="message {{ m.sender }}"><span>{{ m.content }}</span></div>{% endfor %}</div>
+    <div class="next-box"><strong>Prototype milestone reached.</strong><p>Next: PHI redaction → risk gate → LLM response → Living Memory → Send to Clinic.</p></div>
+    <p class="emergency">If this is an emergency, exit Nightingale and dial 999 for Emergency Services.</p>
+  </section>
+</div>
+{% endblock %}

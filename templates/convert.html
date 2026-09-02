@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Continue securely · Nightingale{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <div class="eyebrow">STEP 3 · TRUST TRANSITION</div>
+  <h1>Continue with your context</h1>
+  <p>You can create a patient session without repeating what you already shared. Your original acquisition source remains linked.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="{% url 'convert' lead.id %}" class="form-stack">
+    {% csrf_token %}
+    <label>Email<input name="email" type="email" required placeholder="you@example.com"></label>
+    <label>Phone<input name="phone" required placeholder="012-3456789"></label>
+    <label class="check"><input type="checkbox" name="consent" value="yes" required><span>I consent to sharing my healthcare information with {{ lead.clinic.name }}.</span></label>
+    <button class="primary">Create PatientSession</button>
+  </form>
+  <p class="fineprint">Prototype note: verification/OTP is not implemented in this first slice.</p>
+</section>
+{% endblock %}

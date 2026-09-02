@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Acquisition Simulator · Nightingale{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <div class="eyebrow">STEP 1 · ACQUISITION</div>
+  <h1>Simulate a first touch</h1>
+  <p class="muted">This stands in for a Meta/TikTok/website/staff acquisition event. The resulting LeadSession keeps its attribution.</p>
+  <form method="post" action="{% url 'simulate_acquisition' %}" class="form-stack">
+    {% csrf_token %}<input type="hidden" name="clinic_id" value="{{ clinic.id }}">
+    <label>Channel<select name="source_channel">
+      <option value="instagram_comment">Instagram comment</option>
+      <option value="facebook_comment">Facebook comment</option>
+      <option value="staff_referral">Staff referral</option>
+      <option value="website_widget">Website widget</option>
+      <option value="instagram_ad_click">Instagram ad click</option>
+    </select></label>
+    <label>Social handle (optional)<input name="social_handle" placeholder="@sarah88"></label>
+    <label>Campaign ID<input name="campaign_id" value="egg_freezing_2026"></label>
+    <label>Creative<input name="creative" value="video_A"></label>
+    <label>Context<textarea name="landing_context" rows="3">egg freezing</textarea></label>
+    <button class="primary">Simulate arrival</button>
+  </form>
+</section>
+{% endblock %}
