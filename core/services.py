@@ -1,5 +1,7 @@
 from .channel_rules import CHANNEL_RULES
-from .models import FunnelEvent, Message
+from .models import FunnelEvent, Message, RiskAssessment
+from .redaction import redact_phi
+from .risk import assess_risk
 
 VALUE_KEYWORDS = ("what should i ask", "questions", "prepare", "egg freezing")
 
@@ -30,3 +32,39 @@ def copy_guest_messages_to_patient(lead, patient_session):
             redacted_content=original.redacted_content,
             origin_message=original,
         )
+
+def process_incoming_message(message):
+    """
+    Safety processing for a guest/patient message.
+
+    1. Redact PII for safe downstream AI use.
+    2. Run deterministic + semantic risk assessment.
+    3. Persist the RiskAssessment.
+    """
+
+    if message.sender not in {
+        Message.Sender.GUEST,
+        Message.Sender.PATIENT,
+    }:
+        return None
+
+    # Create and store the safe AI-facing version
+    message.redacted_content = redact_phi(message.content)
+
+    message.save(
+        update_fields=["redacted_content"]
+    )
+
+    # Run the full risk pipeline
+    risk = assess_risk(message.content)
+
+    assessment, _ = RiskAssessment.objects.update_or_create(
+        message=message,
+        defaults={
+            "risk_level": risk.level.lower(),
+            "risk_reason": risk.reason,
+            "confidence": risk.confidence,
+        },
+    )
+
+    return assessment

@@ -1,4 +1,5 @@
 import uuid
+
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -90,12 +91,27 @@ class RiskAssessment(models.Model):
         LOW = "low", "Low"
         MEDIUM = "medium", "Medium"
         HIGH = "high", "High"
+        AMBIGUOUS = "ambiguous", "Ambiguous"
 
-    message = models.OneToOneField(Message, on_delete=models.CASCADE)
-    risk_level = models.CharField(max_length=10, choices=RiskLevel.choices)
-    risk_reason = models.CharField(max_length=500)
-    confidence = models.CharField(max_length=10)
-    assessed_at = models.DateTimeField(auto_now_add=True)
+    message = models.OneToOneField(
+        Message,
+        on_delete=models.CASCADE,
+    )
+
+    risk_level = models.CharField(
+        max_length=12,
+        choices=RiskLevel.choices,
+    )
+
+    risk_reason = models.CharField(
+        max_length=500,
+    )
+
+    confidence = models.FloatField()
+
+    assessed_at = models.DateTimeField(
+        auto_now_add=True,
+    )
 
 class Escalation(models.Model):
     class Status(models.TextChoices):

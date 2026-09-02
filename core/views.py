@@ -4,8 +4,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .models import Clinic, Consent, FunnelEvent, LeadSession, Message, Patient, PatientSession
-from .services import copy_guest_messages_to_patient, emit, guest_reply, opening_for
-
+from .services import (
+    copy_guest_messages_to_patient,
+    emit,
+    guest_reply,
+    opening_for,
+    process_incoming_message,
+)
 
 def home(request):
     clinic, _ = Clinic.objects.get_or_create(name="Nightingale Demo Clinic", slug="nightingale-demo")
@@ -49,7 +54,8 @@ def guest_send(request, lead_id):
         text = request.POST.get("message", "").strip()
         if text:
             first_guest = not lead.messages.filter(sender=Message.Sender.GUEST).exists()
-            Message.objects.create(lead_session=lead, sender=Message.Sender.GUEST, content=text)
+            guest_message = Message.objects.create(lead_session=lead, sender=Message.Sender.GUEST, content=text)
+            process_incoming_message(guest_message)
             if first_guest:
                 emit(lead, FunnelEvent.EventType.CONVERSATION_STARTED)
             reply, is_value = guest_reply(text)
