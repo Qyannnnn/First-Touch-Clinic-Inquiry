@@ -68,3 +68,46 @@ def process_incoming_message(message):
     )
 
     return assessment
+
+def risk_aware_guest_reply(text, assessment):
+    """
+    Produce a safe user-facing response based on risk level.
+
+    Internal risk reasons are NOT shown directly to the user.
+    """
+
+    if assessment is None:
+        return guest_reply(text)
+
+    level = assessment.risk_level
+
+    if level == "high":
+        return (
+            "What you described may need urgent medical attention. "
+            "I can't determine the cause here. "
+            "If your symptoms are severe, worsening, or you feel unsafe, "
+            "please seek emergency help now.\n\n"
+            "If this is an emergency, exit Nightingale and dial 999 "
+            "for Emergency Services."
+        ), False
+
+    if level == "medium":
+        return (
+            "What you described may be important to have reviewed by a "
+            "healthcare professional. I can't diagnose the cause here, "
+            "but I can continue helping you organise the information "
+            "for the clinic."
+        ), False
+
+    if level == "ambiguous":
+        return (
+            "I'm not able to tell how serious this is from that description "
+            "alone. Could you tell me whether the symptoms are severe, "
+            "getting rapidly worse, or include difficulty breathing, "
+            "fainting, heavy bleeding, or feeling unsafe?\n\n"
+            "If this is an emergency, exit Nightingale and dial 999 "
+            "for Emergency Services."
+        ), False
+
+    # LOW
+    return guest_reply(text)

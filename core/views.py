@@ -54,11 +54,35 @@ def guest_send(request, lead_id):
         text = request.POST.get("message", "").strip()
         if text:
             first_guest = not lead.messages.filter(sender=Message.Sender.GUEST).exists()
-            guest_message = Message.objects.create(lead_session=lead, sender=Message.Sender.GUEST, content=text)
-            process_incoming_message(guest_message)
+            from .services import (
+                copy_guest_messages_to_patient,
+                emit,
+                guest_reply,
+                opening_for,
+                process_incoming_message,
+                risk_aware_guest_reply,
+            )
+
+            guest_message = Message.objects.create(
+                lead_session=lead,
+                sender=Message.Sender.GUEST,
+                content=text,
+            )
+
+            assessment = process_incoming_message(
+                guest_message
+            )
+
             if first_guest:
-                emit(lead, FunnelEvent.EventType.CONVERSATION_STARTED)
-            reply, is_value = guest_reply(text)
+                emit(
+                    lead,
+                    FunnelEvent.EventType.CONVERSATION_STARTED
+                )
+
+            reply, is_value = risk_aware_guest_reply(
+                text,
+                assessment,
+            )
             Message.objects.create(lead_session=lead, sender=Message.Sender.AI, content=reply)
             if is_value and not lead.events.filter(event_type=FunnelEvent.EventType.VALUE_EVENT).exists():
                 emit(lead, FunnelEvent.EventType.VALUE_EVENT, {"value_type": "question_preparation"})
