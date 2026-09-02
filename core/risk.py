@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-
+from .llm_risk import assess_semantic_risk
+from .redaction import redact_phi
 
 @dataclass
 class RiskResult:
@@ -31,4 +32,30 @@ def assess_deterministic_risk(text: str) -> RiskResult:
         level="PENDING",
         reason="Requires semantic clinical risk assessment",
         confidence=0.0,
+    )
+
+def assess_risk(text: str) -> RiskResult:
+    """
+    Full Nightingale risk pipeline.
+
+    1. Mandatory deterministic emergency check.
+    2. Redact PII.
+    3. Semantic LLM risk assessment.
+    """
+
+    # First: guaranteed fail-safe
+    deterministic = assess_deterministic_risk(text)
+
+    if deterministic.level == "HIGH":
+        return deterministic
+
+    # Never send raw identifying information to the LLM
+    redacted_text = redact_phi(text)
+
+    semantic = assess_semantic_risk(redacted_text)
+
+    return RiskResult(
+        level=semantic.level,
+        reason=semantic.reason,
+        confidence=semantic.confidence,
     )
