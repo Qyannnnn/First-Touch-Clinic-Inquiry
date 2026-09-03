@@ -1,154 +1,99 @@
-# Nightingale 48HR — First Prototype
+# Nightingale — First-Touch Clinic Inquiry
 
-This is the **first vertical slice** for the candidate build. It deliberately proves the journey before connecting a real LLM:
+Nightingale is a 48-hour Django prototype that connects a guest clinic inquiry into a secure PatientSession with risk-gated AI chat, Living Memory, provenance, and Send to Clinic escalation.
 
-`Acquisition Simulator → LeadSession → Guest Chat → Value Event → Trust Transition → Consent → PatientSession`
+## Setup & Run
 
-## What is implemented
+1. Clone the repository.
+2. Create and activate a virtual environment.
+3. Install dependencies:
+   pip install -r requirements.txt
+4. Copy .env.example to .env and add:
+   GEMINI_API_KEY=your-key
+   GEMINI_MODEL=gemini-3.5-flash-lite
+   DJANGO_SECRET_KEY=your-secret
+   DJANGO_DEBUG=True
+5. Run:
+   python manage.py migrate
+   python manage.py setup_demo
+   python manage.py runserver
 
-- Django monolith structure (Python backend + server-rendered HTML/CSS)
-- PostgreSQL-only configuration
-- Acquisition simulator with channel attribution
-- `LeadSession` persistence
-- Guest chat with channel-aware opening
-- `visitor`, `conversation_started`, `value_event`, `auth_started`, `consented`, `patient_created` funnel events
-- Trust-transition UI
-- Basic email/phone collection + consent
-- Immutable UUID Patient IDs
-- LeadSession → PatientSession conversion
-- Previous conversation carried into PatientSession
-- Original acquisition source preserved
-- Models already reserved for Living Memory, Risk Assessment, and Escalation
+Open:
+http://127.0.0.1:8000/
 
-## Intentionally NOT implemented yet
+Staff portal:
+http://127.0.0.1:8000/staff/
 
-Do **not** present this slice as production-secure yet. The next slice must add:
+Demo staff:
+Username: demo_staff
+Password: NightingaleDemo123!
 
-- verified email/phone authentication (current flow is a placeholder)
-- encrypted original message storage
-- PHI redaction before LLM calls
-- deterministic emergency/risk gate
-- real LLM integration
-- Living Memory extraction and mutation history
-- structured escalation payload / clinician queue
-- RBAC tests and server-side patient isolation
-- rate limiting / guest-retention cleanup
+## Automated Tests
 
-## Local setup
+Run:
+python manage.py test core.tests
 
-### 1. Create a virtual environment
+The test suite covers:
+- Guest to Patient conversion
+- Value events
+- Escalation payload
+- Risk escalation
+- Living Memory mutation
+- PHI redaction
+- Access control
+- Trust / AI identity response
 
-```bash
-python -m venv .venv
-```
+Current result: 12 tests passing.
 
-Activate it.
+## PHI Redaction
 
-Windows PowerShell:
+Redaction is implemented in core/redaction.py.
+Before text is sent to Gemini, supported identifiers are removed or anonymized, including names, phone numbers, email addresses, Singapore NRIC/FIN-style IDs, and Malaysian IC-style IDs.
 
-```powershell
-.venv\Scripts\Activate.ps1
-```
+Microsoft Presidio is used together with deterministic regex rules. Risk processing and redaction are coordinated in core/services.py -> process_incoming_message().
 
-macOS/Linux:
+Only synthetic demo data should be used.
 
-```bash
-source .venv/bin/activate
-```
+## RBAC / Access Control
 
-### 2. Install packages
+Server-side access control is implemented in core/views.py -> get_authorized_patient_session().
+A patient can access only their own PatientSession. The check protects patient_chat, patient_send, and send_to_clinic.
 
-```bash
-pip install -r requirements.txt
-```
+Patients cannot access the staff admin area. Staff access is protected by Django Admin authentication.
 
-### 3. Create PostgreSQL database/user
+## Main Flow
 
-Example:
+Acquisition -> LeadSession -> Guest conversation -> Value event -> Trust transition -> Consent -> PatientSession -> Risk-gated AI intake -> Living Memory -> Send to Clinic
 
-```sql
-CREATE DATABASE nightingale_db;
-CREATE USER nightingale_user WITH PASSWORD 'your-password';
-GRANT ALL PRIVILEGES ON DATABASE nightingale_db TO nightingale_user;
-```
+## Risk Safety
 
-### 4. Set environment variables
+Every health message is risk assessed before the AI response.
+Mandatory HIGH-risk phrases include:
+- crushing chest pain
+- difficulty breathing
+- heavy bleeding
+- want to hurt myself
 
-Copy `.env.example` values into your shell/environment. Django reads these directly from environment variables.
+HIGH-risk messages receive urgent safety guidance and the interface always shows:
+“If this is an emergency, exit Nightingale and dial 999 for Emergency Services.”
 
-Minimum:
+## Living Memory
 
-```text
-DJANGO_SECRET_KEY=replace-this
-POSTGRES_DB=nightingale_db
-POSTGRES_USER=nightingale_user
-POSTGRES_PASSWORD=your-password
-POSTGRES_HOST=127.0.0.1
-POSTGRES_PORT=5432
-```
+After consent, Nightingale extracts structured facts such as chief complaint, symptoms, timeline, medications, and allergies.
+Each memory item stores value, status, provenance pointer, and updated timestamp. Previous states are preserved as superseded rather than deleted.
 
-### 5. Create migrations
+## Send to Clinic
 
-```bash
-python manage.py makemigrations core
-python manage.py migrate
-```
+For Medium, High, or Ambiguous PatientSession concerns, the user can choose “Send to Clinic”.
+The escalation stores the triggering message, triage summary, profile snapshot, provenance, acquisition context, and status.
+The patient receives a confirmation with an expected response time of approximately 12–18 hours.
 
-### 6. Optional admin user
+## Tech Stack
 
-```bash
-python manage.py createsuperuser
-```
+Python 3.12, Django 5.2, SQLite, Google Gemini, Microsoft Presidio, Pydantic, HTML, CSS, JavaScript.
 
-### 7. Run
+## Prototype Limitations
 
-```bash
-python manage.py runserver
-```
+This is a 48-hour candidate prototype. Production deployment would still require full verified authentication such as OTP/MFA, production-grade encryption at rest, hardened staff visibility controls, formal retention/deletion policies, production monitoring, and live Meta/TikTok integrations.
 
-Open `http://127.0.0.1:8000/`.
-
-## Demo path
-
-1. Choose **Instagram comment** or **Staff referral**.
-2. Simulate arrival.
-3. In Guest Chat type: `What questions should I ask about egg freezing?`
-4. A value event is created and the trust-transition CTA appears.
-5. Choose **Review & continue securely**.
-6. Enter test email/phone and tick consent.
-7. The system creates a Patient + PatientSession and carries the existing conversation forward.
-8. The Patient page shows the original acquisition channel/campaign.
-
-## Next implementation slice
-
-The next priority should be:
-
-`message → redaction → deterministic risk gate → allowed LLM call → structured Memory update → response`
-
-Then implement `Send to Clinic` and the required micro-tests.
-
-## Optional: fastest PostgreSQL startup with Docker
-
-If Docker Desktop is installed:
-
-```bash
-docker compose up -d db
-```
-
-Then use:
-
-```text
-POSTGRES_DB=nightingale_db
-POSTGRES_USER=nightingale_user
-POSTGRES_PASSWORD=nightingale_dev_password
-POSTGRES_HOST=127.0.0.1
-POSTGRES_PORT=5432
-```
-
-## Provenance note
-
-When guest messages are carried into the PatientSession, the copied PatientSession message keeps an `origin_message` pointer back to the original LeadSession message. This prevents conversion from breaking the source chain.
-
-## Channel-rules note
-
-Channel-specific opening strategies live centrally in `core/channel_rules.py`. The request code performs generic rule lookup instead of embedding separate channel wording throughout views.
+The prototype is non-diagnostic and must not be treated as a replacement for licensed clinical care or emergency services.
