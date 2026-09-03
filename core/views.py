@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.http import Http404
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -127,11 +128,38 @@ def convert(request, lead_id):
     request.session["patient_session_id"] = str(patient_session.id)
     return redirect("patient_chat", session_id=patient_session.id)
 
+def get_authorized_patient_session(request, session_id):
+    """
+    Prevent one patient from accessing another patient's session.
+    """
 
-def patient_chat(request, session_id):
     session = get_object_or_404(
         PatientSession,
         id=session_id,
+    )
+
+    # Logged-in patient must own the PatientSession.
+    if request.user.is_authenticated:
+        if session.patient.user_id != request.user.id:
+            raise Http404
+
+        return session
+
+    # Prototype fallback for the conversion flow.
+    # Only the PatientSession stored in this browser session is accessible.
+    active_session_id = request.session.get(
+        "patient_session_id"
+    )
+
+    if str(session.id) != str(active_session_id):
+        raise Http404
+
+    return session
+
+def patient_chat(request, session_id):
+    session = get_authorized_patient_session(
+        request,
+        session_id,
     )
 
     memory_items = (
@@ -187,9 +215,9 @@ def patient_chat(request, session_id):
     )
 
 def patient_send(request, session_id):
-    session = get_object_or_404(
-        PatientSession,
-        id=session_id,
+    session = get_authorized_patient_session(
+        request,
+        session_id,
     )
 
     if request.method == "POST":
@@ -230,9 +258,9 @@ def patient_send(request, session_id):
     )
 
 def send_to_clinic(request, session_id):
-    session = get_object_or_404(
-        PatientSession,
-        id=session_id,
+    session = get_authorized_patient_session(
+        request,
+        session_id,
     )
 
     if request.method != "POST":
