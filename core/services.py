@@ -1,8 +1,9 @@
 from .channel_rules import CHANNEL_RULES
-from .models import FunnelEvent, Message, RiskAssessment
+from .models import FunnelEvent, MemoryItem, Message, RiskAssessment
 from .redaction import redact_phi
 from .risk import assess_risk
 from .llm_chat import generate_intake_reply
+from .llm_memory import extract_memory_facts
 
 VALUE_KEYWORDS = ("what should i ask", "questions", "prepare", "egg freezing")
 
@@ -25,14 +26,24 @@ def emit(lead, event_type, metadata=None):
     return FunnelEvent.objects.create(lead_session=lead, event_type=event_type, metadata=metadata or {})
 
 def copy_guest_messages_to_patient(lead, patient_session):
+    copied_messages = []
+
     for original in lead.messages.order_by("created_at"):
-        Message.objects.create(
+        copied = Message.objects.create(
             patient_session=patient_session,
-            sender=Message.Sender.PATIENT if original.sender == Message.Sender.GUEST else original.sender,
+            sender=(
+                Message.Sender.PATIENT
+                if original.sender == Message.Sender.GUEST
+                else original.sender
+            ),
             content=original.content,
             redacted_content=original.redacted_content,
             origin_message=original,
         )
+
+        copied_messages.append(copied)
+
+    return copied_messages
 
 def process_incoming_message(message):
     """
@@ -70,11 +81,150 @@ def process_incoming_message(message):
 
     return assessment
 
+def update_living_memory(message):
+    """
+    Extract structured memory from a PatientSession message.
+
+    Previous facts are preserved rather than overwritten so that
+    provenance remains traceable.
+    """
+
+    if (
+        message.sender != Message.Sender.PATIENT
+        or not message.patient_session_id
+    ):
+        return []
+
+    safe_text = (
+        message.redacted_content
+        or redact_phi(message.content)
+    )
+
+    try:
+        extraction = extract_memory_facts(
+            safe_text
+        )
+    except Exception:
+        # Memory extraction failure must never break the chat.
+        return []
+
+    created_items = []
+
+    for fact in extraction.facts:
+        value = fact.value.strip()
+
+        if not value:
+            continue
+
+        # Look for an existing current version of the same fact.
+        existing = (
+            MemoryItem.objects
+            .filter(
+                patient_session=message.patient_session,
+                kind=fact.kind,
+                value__iexact=value,
+            )
+            .exclude(status="superseded")
+            .order_by("-updated_at")
+            .first()
+        )
+
+        # Nothing changed: don't create duplicates.
+        if (
+            existing
+            and existing.status == fact.status
+        ):
+            continue
+
+        # Preserve the previous version instead of deleting it.
+        if existing:
+            existing.status = "superseded"
+            existing.save(
+                update_fields=["status"]
+            )
+
+        # Chief complaint should normally have one current version.
+        if fact.kind == "chief_complaint":
+            (
+                MemoryItem.objects
+                .filter(
+                    patient_session=message.patient_session,
+                    kind="chief_complaint",
+                )
+                .exclude(status="superseded")
+                .update(status="superseded")
+            )
+
+        provenance_message = (
+            message.origin_message
+            if message.origin_message
+            else message
+        )
+
+        item = MemoryItem.objects.create(
+            patient_session=message.patient_session,
+            kind=fact.kind,
+            value=value,
+            status=fact.status,
+            provenance_pointer=provenance_message,
+        )
+
+        created_items.append(item)
+
+    return created_items
+
 EMERGENCY_NOTICE = (
     "If this is an emergency, exit Nightingale and dial 999 "
     "for Emergency Services."
 )
 
+def build_recent_context(message, limit=6):
+    """
+    Build a privacy-safe recent conversation for Gemini.
+
+    User messages use redacted_content.
+    AI messages use their generated content.
+    """
+
+    if message.patient_session_id:
+        queryset = Message.objects.filter(
+            patient_session=message.patient_session
+        )
+
+    elif message.lead_session_id:
+        queryset = Message.objects.filter(
+            lead_session=message.lead_session
+        )
+
+    else:
+        return ""
+
+    # Do not repeat the current message because we send it separately.
+    recent = list(
+        queryset.exclude(id=message.id)
+        .order_by("-created_at")[:limit]
+    )
+
+    recent.reverse()
+
+    lines = []
+
+    for item in recent:
+        if item.sender == Message.Sender.AI:
+            role = "Nightingale"
+            safe_content = item.content
+        else:
+            role = "User"
+            safe_content = (
+                item.redacted_content
+                or redact_phi(item.content)
+            )
+
+        lines.append(
+            f"{role}: {safe_content}"
+        )
+
+    return "\n".join(lines)
 
 def risk_aware_guest_reply(text, assessment):
     """
@@ -90,11 +240,19 @@ def risk_aware_guest_reply(text, assessment):
         else "ambiguous"
     )
 
+    conversation_context = ""
+
+    if assessment:
+        conversation_context = build_recent_context(
+            assessment.message
+        )
+
     try:
         reply = generate_intake_reply(
             redacted_text=redacted_text,
             patient_mode=False,
             risk_level=level,
+            conversation_context=conversation_context,
         )
 
     except Exception:
@@ -129,11 +287,19 @@ def risk_aware_patient_reply(text, assessment):
         else "ambiguous"
     )
 
+    conversation_context = ""
+
+    if assessment:
+        conversation_context = build_recent_context(
+            assessment.message
+        )
+
     try:
         reply = generate_intake_reply(
             redacted_text=redacted_text,
             patient_mode=True,
             risk_level=level,
+            conversation_context=conversation_context,
         )
 
     except Exception:

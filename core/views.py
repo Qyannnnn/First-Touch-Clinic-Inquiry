@@ -3,7 +3,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import Clinic, Consent, FunnelEvent, LeadSession, Message, Patient, PatientSession
+from .models import Clinic, Consent, FunnelEvent, LeadSession, MemoryItem, Message, Patient, PatientSession
 from .services import (
     copy_guest_messages_to_patient,
     emit,
@@ -12,6 +12,7 @@ from .services import (
     process_incoming_message,
     risk_aware_guest_reply,
     risk_aware_patient_reply,
+    update_living_memory,
 )
 
 def home(request):
@@ -109,7 +110,16 @@ def convert(request, lead_id):
     Consent.objects.create(patient=patient, clinic=lead.clinic, share_health_info=True)
     emit(lead, FunnelEvent.EventType.CONSENTED)
     patient_session = PatientSession.objects.create(patient=patient, clinic=lead.clinic, origin_lead_session=lead)
-    copy_guest_messages_to_patient(lead, patient_session)
+    copied_messages = copy_guest_messages_to_patient(
+        lead,
+        patient_session,
+    )
+
+    for copied_message in copied_messages:
+        if copied_message.sender == Message.Sender.PATIENT:
+            update_living_memory(
+                copied_message
+            )
     lead.converted_at = timezone.now()
     lead.save(update_fields=["converted_at"])
     emit(lead, FunnelEvent.EventType.PATIENT_CREATED)
@@ -118,11 +128,29 @@ def convert(request, lead_id):
 
 
 def patient_chat(request, session_id):
-    session = get_object_or_404(PatientSession, id=session_id)
-    return render(request, "patient_chat.html", {
-        "patient_session": session,
-        "messages": session.messages.order_by("created_at"),
-    })
+    session = get_object_or_404(
+        PatientSession,
+        id=session_id,
+    )
+
+    memory_items = (
+        MemoryItem.objects
+        .filter(patient_session=session)
+        .exclude(status="superseded")
+        .order_by("kind", "updated_at")
+    )
+
+    return render(
+        request,
+        "patient_chat.html",
+        {
+            "patient_session": session,
+            "messages": session.messages.order_by(
+                "created_at"
+            ),
+            "memory_items": memory_items,
+        },
+    )
 
 def patient_send(request, session_id):
     session = get_object_or_404(
@@ -147,6 +175,10 @@ def patient_send(request, session_id):
                 patient_message
             )
 
+            update_living_memory(
+                patient_message
+            )
+            
             reply = risk_aware_patient_reply(
                 text,
                 assessment,

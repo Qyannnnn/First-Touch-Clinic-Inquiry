@@ -5,7 +5,38 @@
   <aside class="context-card">
     <div class="eyebrow">PATIENTSESSION</div><h2>Context preserved</h2>
     <dl><dt>Patient ID</dt><dd class="mono">{{ patient_session.patient.id }}</dd><dt>Original channel</dt><dd>{{ patient_session.origin_lead_session.source_channel }}</dd><dt>Campaign</dt><dd>{{ patient_session.origin_lead_session.campaign_id }}</dd></dl>
-    <h3>Living Profile</h3><p class="muted">Next build: chief complaint, symptoms, medications, allergies + provenance.</p>
+    <h3>Living Profile</h3>
+    {% if memory_items %}
+      <div class="memory-list">
+
+        {% for item in memory_items %}
+          <div class="memory-item">
+
+            <strong>
+              {{ item.kind|title }}
+            </strong>
+
+            <div>
+              {{ item.value }}
+            </div>
+
+            <small class="muted">
+              Status: {{ item.status }}
+              · Source:
+              <span class="mono">
+                {{ item.provenance_pointer.id }}
+              </span>
+            </small>
+
+          </div>
+        {% endfor %}
+
+      </div>
+    {% else %}
+      <p class="muted">
+        Living Memory will appear as the conversation develops.
+      </p>
+    {% endif %}
   </aside>
   <section class="chat-card">
     <div class="chat-heading"><div><div class="eyebrow">STEP 4 · PATIENT</div><h1>Nightingale AI</h1></div><span class="badge patient-badge">Patient</span></div>
