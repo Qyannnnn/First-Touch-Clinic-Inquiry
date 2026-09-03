@@ -1,0 +1,55 @@
+ATTRIBUTION.txt
+
+Nightingale — First-Touch Clinic Inquiry
+48-Hour Candidate Build
+
+External libraries / services used:
+
+1. Django
+   Purpose: Web framework, ORM, authentication, sessions, admin, testing.
+   License: BSD 3-Clause License
+   https://www.djangoproject.com/
+
+2. python-dotenv
+   Purpose: Load local environment variables from .env.
+   License: BSD 3-Clause License
+   https://github.com/theskumar/python-dotenv
+
+3. Microsoft Presidio
+   Packages: presidio-analyzer, presidio-anonymizer
+   Purpose: Detect and anonymize supported personal identifiers before LLM use.
+   License: MIT License
+   https://github.com/microsoft/presidio
+
+4. Google Gen AI Python SDK
+   Package: google-genai
+   Purpose: Access Google Gemini for semantic risk classification, conversational replies, and Living Memory extraction.
+   License: Apache License 2.0
+   https://github.com/googleapis/python-genai
+
+5. Google Gemini
+   Model used: gemini-3.5-flash-lite
+   Purpose: Hosted language model used for non-diagnostic conversation, semantic risk classification, and structured memory extraction.
+   License / Terms: Proprietary Google hosted service; use is governed by Google Gemini API / Google service terms.
+   https://ai.google.dev/
+
+6. Pydantic
+   Purpose: Structured validation of Gemini JSON outputs.
+   License: MIT License
+   https://github.com/pydantic/pydantic
+
+7. SQLite
+   Purpose: Local prototype database through Django.
+   License: Public Domain
+   https://www.sqlite.org/
+
+8. Python
+   Purpose: Application runtime.
+   License: Python Software Foundation License
+   https://www.python.org/
+
+Notes:
+- No external medical dataset was used.
+- No external clinical model was fine-tuned or trained for this prototype.
+- Only synthetic demo/test data should be used.
+- HTML, CSS, and JavaScript UI code in this repository was written specifically for this candidate build unless otherwise stated in source comments.
