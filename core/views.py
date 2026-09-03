@@ -11,6 +11,7 @@ from .services import (
     opening_for,
     process_incoming_message,
     risk_aware_guest_reply,
+    risk_aware_patient_reply,
 )
 
 def home(request):
@@ -55,14 +56,6 @@ def guest_send(request, lead_id):
         text = request.POST.get("message", "").strip()
         if text:
             first_guest = not lead.messages.filter(sender=Message.Sender.GUEST).exists()
-            from .services import (
-                copy_guest_messages_to_patient,
-                emit,
-                guest_reply,
-                opening_for,
-                process_incoming_message,
-                risk_aware_guest_reply,
-            )
 
             guest_message = Message.objects.create(
                 lead_session=lead,
@@ -154,10 +147,7 @@ def patient_send(request, session_id):
                 patient_message
             )
 
-            # Temporary safety-aware response.
-            # We will replace LOW-risk responses with
-            # the real AI intake assistant next.
-            reply, _ = risk_aware_guest_reply(
+            reply = risk_aware_patient_reply(
                 text,
                 assessment,
             )

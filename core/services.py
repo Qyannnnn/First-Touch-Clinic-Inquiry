@@ -2,6 +2,7 @@ from .channel_rules import CHANNEL_RULES
 from .models import FunnelEvent, Message, RiskAssessment
 from .redaction import redact_phi
 from .risk import assess_risk
+from .llm_chat import generate_intake_reply
 
 VALUE_KEYWORDS = ("what should i ask", "questions", "prepare", "egg freezing")
 
@@ -69,45 +70,89 @@ def process_incoming_message(message):
 
     return assessment
 
+EMERGENCY_NOTICE = (
+    "If this is an emergency, exit Nightingale and dial 999 "
+    "for Emergency Services."
+)
+
+
 def risk_aware_guest_reply(text, assessment):
     """
-    Produce a safe user-facing response based on risk level.
-
-    Internal risk reasons are NOT shown directly to the user.
+    Gemini produces the conversational response.
+    Python controls privacy and safety context.
     """
 
-    if assessment is None:
-        return guest_reply(text)
+    redacted_text = redact_phi(text)
 
-    level = assessment.risk_level
+    level = (
+        assessment.risk_level
+        if assessment
+        else "ambiguous"
+    )
 
+    try:
+        reply = generate_intake_reply(
+            redacted_text=redacted_text,
+            patient_mode=False,
+            risk_level=level,
+        )
+
+    except Exception:
+        # Safe fallback if Gemini is unavailable
+        return (
+            "I'm unable to safely complete that response right now. "
+            "Please contact the clinic if you need help."
+        ), False
+
+    # Mandatory deterministic emergency notice
     if level == "high":
-        return (
-            "What you described may need urgent medical attention. "
-            "I can't determine the cause here. "
-            "If your symptoms are severe, worsening, or you feel unsafe, "
-            "please seek emergency help now.\n\n"
-            "If this is an emergency, exit Nightingale and dial 999 "
-            "for Emergency Services."
-        ), False
+        if EMERGENCY_NOTICE not in reply:
+            reply = f"{reply}\n\n{EMERGENCY_NOTICE}"
 
-    if level == "medium":
-        return (
-            "What you described may be important to have reviewed by a "
-            "healthcare professional. I can't diagnose the cause here, "
-            "but I can continue helping you organise the information "
-            "for the clinic."
-        ), False
+    # LOW guest conversations count as useful guest value
+    is_value = level == "low"
 
-    if level == "ambiguous":
-        return (
-            "I'm not able to tell how serious this is from that description "
-            "alone. Could you tell me whether the symptoms are severe, "
-            "getting rapidly worse, or include difficulty breathing, "
-            "fainting, heavy bleeding, or feeling unsafe?\n\n"
-            "If this is an emergency, exit Nightingale and dial 999 "
-            "for Emergency Services."
-        ), False
+    return reply, is_value
 
-    # LOW
-    return guest_reply(text)
+
+def risk_aware_patient_reply(text, assessment):
+    """
+    Gemini produces the conversational patient response.
+    Python controls privacy and safety context.
+    """
+
+    redacted_text = redact_phi(text)
+
+    level = (
+        assessment.risk_level
+        if assessment
+        else "ambiguous"
+    )
+
+    try:
+        reply = generate_intake_reply(
+            redacted_text=redacted_text,
+            patient_mode=True,
+            risk_level=level,
+        )
+
+    except Exception:
+        # Conservative fallback
+        if level == "high":
+            return (
+                "I'm unable to safely complete this response right now. "
+                "Please seek urgent medical attention.\n\n"
+                f"{EMERGENCY_NOTICE}"
+            )
+
+        return (
+            "I'm unable to safely complete that response right now. "
+            "Please contact the clinic for further assistance."
+        )
+
+    # Mandatory emergency wording can never be omitted
+    if level == "high":
+        if EMERGENCY_NOTICE not in reply:
+            reply = f"{reply}\n\n{EMERGENCY_NOTICE}"
+
+    return reply
