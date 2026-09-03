@@ -130,13 +130,18 @@ def convert(request, lead_id):
 
 def get_authorized_patient_session(request, session_id):
     """
-    Prevent one patient from accessing another patient's session.
+    Allow staff to view consented PatientSessions while preventing
+    one patient from accessing another patient's session.
     """
 
     session = get_object_or_404(
         PatientSession,
         id=session_id,
     )
+
+    # Staff / superuser may access consented patient sessions.
+    if request.user.is_authenticated and request.user.is_staff:
+        return session
 
     # Logged-in patient must own the PatientSession.
     if request.user.is_authenticated:
@@ -145,8 +150,8 @@ def get_authorized_patient_session(request, session_id):
 
         return session
 
-    # Prototype fallback for the conversion flow.
-    # Only the PatientSession stored in this browser session is accessible.
+    # Anonymous prototype flow:
+    # only the PatientSession created in this browser session is allowed.
     active_session_id = request.session.get(
         "patient_session_id"
     )
