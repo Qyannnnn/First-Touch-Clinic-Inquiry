@@ -3,7 +3,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import Clinic, Consent, FunnelEvent, LeadSession, MemoryItem, Message, Patient, PatientSession
+from .models import Clinic, Consent, FunnelEvent, LeadSession, MemoryItem, Message, Patient, PatientSession, RiskAssessment
 from .services import (
     copy_guest_messages_to_patient,
     emit,
@@ -13,6 +13,7 @@ from .services import (
     risk_aware_guest_reply,
     risk_aware_patient_reply,
     update_living_memory,
+    create_clinic_escalation,
 )
 
 def home(request):
@@ -140,6 +141,35 @@ def patient_chat(request, session_id):
         .order_by("kind", "updated_at")
     )
 
+    latest_patient_message = (
+        session.messages
+        .filter(sender=Message.Sender.PATIENT)
+        .order_by("-created_at")
+        .first()
+    )
+
+    latest_assessment = None
+    show_send_to_clinic = False
+
+    if latest_patient_message:
+        latest_assessment = (
+            RiskAssessment.objects
+            .filter(message=latest_patient_message)
+            .first()
+        )
+
+        if (
+            latest_assessment
+            and latest_assessment.risk_level
+            in {"medium", "high", "ambiguous"}
+        ):
+            show_send_to_clinic = True
+
+    sent_escalation = request.session.pop(
+        "sent_escalation",
+        None,
+    )
+
     return render(
         request,
         "patient_chat.html",
@@ -149,6 +179,10 @@ def patient_chat(request, session_id):
                 "created_at"
             ),
             "memory_items": memory_items,
+            "latest_patient_message": latest_patient_message,
+            "latest_assessment": latest_assessment,
+            "show_send_to_clinic": show_send_to_clinic,
+            "sent_escalation": sent_escalation,
         },
     )
 
@@ -189,6 +223,43 @@ def patient_send(request, session_id):
                 sender=Message.Sender.AI,
                 content=reply,
             )
+
+    return redirect(
+        "patient_chat",
+        session_id=session.id,
+    )
+
+def send_to_clinic(request, session_id):
+    session = get_object_or_404(
+        PatientSession,
+        id=session_id,
+    )
+
+    if request.method != "POST":
+        return redirect(
+            "patient_chat",
+            session_id=session.id,
+        )
+
+    message_id = request.POST.get(
+        "message_id"
+    )
+
+    triggering_message = get_object_or_404(
+        Message,
+        id=message_id,
+        patient_session=session,
+        sender=Message.Sender.PATIENT,
+    )
+
+    escalation = create_clinic_escalation(
+        patient_session=session,
+        triggering_message=triggering_message,
+    )
+
+    request.session["sent_escalation"] = (
+        escalation.id
+    )
 
     return redirect(
         "patient_chat",

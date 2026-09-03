@@ -42,6 +42,41 @@
     <div class="chat-heading"><div><div class="eyebrow">STEP 4 · PATIENT</div><h1>Nightingale AI</h1></div><span class="badge patient-badge">Patient</span></div>
     <div class="success-banner">✓ LeadSession converted. Previous conversation carried forward.</div>
     <div class="messages">{% for m in messages %}<div class="message {{ m.sender }}"><span>{{ m.content }}</span></div>{% endfor %}</div>
+    {% if sent_escalation %}
+  <div class="success-banner">
+      ✓ Your concern has been sent securely to the clinic.
+      The clinic should respond within approximately 12–18 hours.
+      You can continue chatting with Nightingale here.
+    </div>
+  {% endif %}
+
+  {% if show_send_to_clinic and latest_patient_message %}
+    <div class="trust-card">
+      <strong>Would you like a clinic team member to review this?</strong>
+
+      <p>
+        You can send the relevant conversation context and your
+        Living Profile securely without repeating your story.
+      </p>
+
+      <form
+        method="post"
+        action="{% url 'send_to_clinic' patient_session.id %}"
+      >
+        {% csrf_token %}
+
+        <input
+          type="hidden"
+          name="message_id"
+          value="{{ latest_patient_message.id }}"
+        >
+
+        <button type="submit" class="primary">
+          Send to Clinic
+        </button>
+      </form>
+    </div>
+  {% endif %}
     <form
       method="post"
       action="{% url 'patient_send' patient_session.id %}"
